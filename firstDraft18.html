@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Budget Calculator - Debugging Restoration</title>
+  <link rel="icon" type="image/png" href="budget.png">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+  <!-- SortableJS for drag-and-drop reordering -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    /* [Existing styles remain unchanged] */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+      color: #333;
+      max-width: 900px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .controls {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .controls > * {
+      margin: 0 5px;
+    }
+    #incomeContainer {
+      text-align: center;
+      padding: 10px;
+      background: #ddd;
+      border-radius: 8px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+    .section {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .expenses-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .group { 
+      margin-bottom: 15px;
+      cursor: grab;
+    }
+    .group-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-radius: 8px;
+      background-color: #ddd;
+    }
+    .group-info {
+      flex: 2;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .group-controls {
+      flex: 1;
+      display: flex;
+      flex-direction: row; /* horizontally aligned */
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+    .group-content {
+      padding: 10px 0;
+      display: block;
+    }
+    .add-btn {
+      background-color: #444;
+      color: white;
+      border: none;
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+    .add-btn:hover { background-color: #222; }
+    .toggle-chart {
+      cursor: pointer;
+      color: #007acc;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      min-width: 300px;
+    }
+    .emoji-picker {
+      cursor: pointer;
+      font-size: 20px;
+      margin: 5px;
+    }
+    .emoji-scroll {
+      display: flex;
+      flex-wrap: wrap;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 5px 0;
+    }
+    .yearly-value {
+      font-size: 0.9em;
+      color: #555;
+      margin-left: 10px;
+    }
+    #chartContainer {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-top: 20px;
+      display: none;
+    }
+    #totalsDiv {
+      text-align: center;
+      padding: 10px;
+      background: #ddd;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    input[type="range"] {
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Title -->
+  <h1>Budget Calculator</h1>
+
+  <!-- Control Panel -->
+  <div class="controls">
+    <button onclick="exportCSV()">📤 Export CSV</button>
+    <input type="file" id="importCSV" accept=".csv" onchange="importCSV(event)">
+    <button onclick="resetAll()">🗑️ Reset All</button>
+    <button id="fullscreenBtn" onclick="toggleFullScreen()">Full Screen</button>
+    <button onclick="createBankGroupElement()">+ Add Bank Group</button>
+  </div>
+  
+  <!-- Income Container -->
+  <div id="incomeContainer">
+    <strong>Available Weekly Money:</strong> $
+    <input id="incomeInput" type="number" value="1000" style="width:100px;">
+  </div>
+
+  <!-- Expense Groups Section -->
+  <div class="section">
+    <div class="expenses-header">
+      <h2>Expenses</h2>
+      <button class="add-btn" onclick="openAddGroupModal()">+ Add Group</button>
+    </div>
+    <div id="groupsContainer"></div>
+  </div>
+
+  <!-- Totals Summary -->
+  <div id="totalsDiv"></div>
+
+  <!-- Pie Chart (at the very bottom) -->
+  <div class="toggle-chart" onclick="toggleChart()">📊 Show Chart ▼</div>
+  <div id="chartContainer">
+    <canvas id="budgetChart"></canvas>
+  </div>
+
+  <!-- Modal for Adding Groups -->
+  <div class="modal" id="addGroupModal">
+    <div class="modal-content">
+      <h3>Add New Group</h3>
+      <input type="text" id="newGroupName" placeholder="Group Name">
+      <div id="emojiPicker" class="emoji-scroll">
+        <span class="emoji-picker" onclick="selectEmoji('💳')">💳</span>
+        <span class="emoji-picker" onclick="selectEmoji('🏠')">🏠</span>
+        <span class="emoji-picker" onclick="selectEmoji('🚗')">🚗</span>
+        <span class="emoji-picker" onclick="selectEmoji('🛡️')">🛡️</span>
+        <span class="emoji-picker" onclick="selectEmoji('📦')">📦</span>
+        <span class="emoji-picker" onclick="selectEmoji('🎓')">🎓</span>
+        <span class="emoji-picker" onclick="selectEmoji('⚽')">⚽</span>
+        <span class="emoji-picker" onclick="selectEmoji('🍕')">🍕</span>
+        <span class="emoji-picker" onclick="selectEmoji('🎉')">🎉</span>
+        <span class="emoji-picker" onclick="selectEmoji('💼')">💼</span>
+        <span class="emoji-picker" onclick="selectEmoji('🧩')">🧩</span>
+        <!-- Additional emojis -->
+        <span class="emoji-picker" onclick="selectEmoji('🚑')">🚑</span>
+        <span class="emoji-picker" onclick="selectEmoji('🥤🥗🍔🍗🍟🥓')">🥤🥗🍔🍗🍟🥓</span>
+        <span class="emoji-picker" onclick="selectEmoji('🚌')">🚌</span>
+      </div>
+      <p>Selected Icon: <span id="selectedEmoji">💳</span></p>
+      <button class="add-btn" onclick="addGroup()">Create Group</button>
+    </div>
+  </div>
+
+  <script>
+    // Global variables and group colors array
+    let selectedEmoji = '💳';
+    let chartVisible = false;
+    let chartInstance = null;
+    const groupColors = ["#b5b5af", "#b3c8cd", "#99bdb8", "#c6d4bd", "#cede9f", "#e88e5a", "#fadec3", "#b8a996", "#7facc6"];
+
+    // Helper function: Lighten a hex color by a given percent (0-1)
+    function lightenColor(color, percent) {
+      let hex = color.replace(/^#/, '');
+      if (hex.length === 3) { hex = hex.split('').map(x => x + x).join(''); }
+      const num = parseInt(hex, 16);
+      let r = (num >> 16);
+      let g = ((num >> 8) & 0x00FF);
+      let b = (num & 0x0000FF);
+      r = Math.round(r + (255 - r) * percent);
+      g = Math.round(g + (255 - g) * percent);
+      b = Math.round(b + (255 - b) * percent);
+      return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    // Debounce function
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+    const debouncedUpdateChart = debounce(updateChart, 200);
+
+    // Modal functions
+    function openAddGroupModal() { 
+      document.getElementById('addGroupModal').style.display = 'flex'; 
+    }
+    function closeAddGroupModal() { 
+      document.getElementById('addGroupModal').style.display = 'none'; 
+    }
+
+    // Emoji selection
+    function selectEmoji(emoji) {
+      selectedEmoji = emoji;
+      document.getElementById('selectedEmoji').textContent = emoji;
+    }
+
+    // Normal group creation
+    function addGroup() {
+      const name = document.getElementById('newGroupName').value.trim();
+      if (!name) return;
+      createGroupElement(name, selectedEmoji);
+      closeAddGroupModal();
+      document.getElementById('newGroupName').value = '';
+      selectedEmoji = '💳';
+      document.getElementById('selectedEmoji').textContent = selectedEmoji;
+      updateChart();
+    }
+
+    // Create group element with left (info) and right (controls) sections.
+    // If the group name is "Bank", the Add Item button will add a mortgage item.
+    function createGroupElement(name, emoji, color) {
+      const container = document.getElementById('groupsContainer');
+      const groupDiv = document.createElement('div');
+      groupDiv.className = 'group';
+      const groupColor = color || groupColors[Math.floor(Math.random() * groupColors.length)];
+      groupDiv.setAttribute('data-color', groupColor);
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'group-title';
+      titleDiv.style.backgroundColor = groupColor;
+
+      // Left section: group info
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'group-info';
+      const emojiSpan = document.createElement('span');
+      emojiSpan.textContent = emoji;
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = name;
+      infoDiv.append(emojiSpan, nameSpan);
+      infoDiv.onclick = () => {
+        contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
+      };
+
+      // Right section: group controls
+      const controlsDiv = document.createElement('div');
+      controlsDiv.className = 'group-controls';
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = function(e) {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.value = nameSpan.textContent;
+        input.onblur = () => {
+          nameSpan.textContent = input.value;
+          input.replaceWith(nameSpan);
+          updateChart();
+        };
+        nameSpan.replaceWith(input);
+        input.focus();
+      };
+      const editColorBtn = document.createElement('button');
+      editColorBtn.textContent = 'Edit Color';
+      editColorBtn.onclick = function(e) {
+        e.stopPropagation();
+        const currentColor = groupDiv.getAttribute('data-color');
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = currentColor;
+        colorInput.onchange = () => {
+          groupDiv.setAttribute('data-color', colorInput.value);
+          titleDiv.style.backgroundColor = colorInput.value;
+          updateChart();
+          colorInput.remove();
+        };
+        controlsDiv.appendChild(colorInput);
+        colorInput.focus();
+      };
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.onclick = function(e) {
+        e.stopPropagation();
+        if (confirm('Delete this group?')) groupDiv.remove();
+        updateChart();
+      };
+      controlsDiv.append(editBtn, editColorBtn, deleteBtn);
+
+      titleDiv.append(infoDiv, controlsDiv);
+
+      // Group content container
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'group-content';
+      contentDiv.style.display = 'block';
+      const addItemBtn = document.createElement('button');
+      addItemBtn.className = 'add-btn';
+      addItemBtn.textContent = '+ Add Item';
+      if (name.toLowerCase() === "bank") {
+        addItemBtn.onclick = () => createMortgageItemElement(contentDiv);
+      } else {
+        addItemBtn.onclick = () => createItemElement(contentDiv);
+      }
+      contentDiv.appendChild(addItemBtn);
+
+      groupDiv.append(titleDiv, contentDiv);
+      container.appendChild(groupDiv);
+    }
+
+    // Updated item creation function for normal items
+    function createItemElement(contentDiv) {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'item';
+
+      const nameInput = document.createElement('input');
+      nameInput.value = 'New Item';
+
+      const valueInput = document.createElement('input');
+      valueInput.type = 'number';
+      valueInput.value = '0';
+      valueInput.style.margin = '0 10px';
+
+      const sliderInput = document.createElement('input');
+      sliderInput.type = 'range';
+      sliderInput.min = 0;
+      sliderInput.max = 1000;
+      sliderInput.value = 0;
+      sliderInput.style.marginRight = '10px';
+
+      const yearlySpan = document.createElement('span');
+      yearlySpan.className = 'yearly-value';
+      yearlySpan.textContent = '($0/year)';
+
+      const editBtn = document.createElement('span');
+      editBtn.textContent = '🖊️';
+      editBtn.onclick = () => {
+        nameInput.disabled = false;
+        nameInput.focus();
+      };
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.onclick = () => {
+        if (confirm('Delete this item?')) {
+          itemDiv.remove();
+          updateChart();
+        }
+      };
+
+      function updateDisplay() {
+        const weekly = parseFloat(valueInput.value) || 0;
+        const yearly = weekly * 52;
+        yearlySpan.textContent = `($${yearly.toFixed(2)}/year)`;
+        updateChart();
+      }
+
+      valueInput.oninput = () => {
+        sliderInput.value = valueInput.value;
+        updateDisplay();
+      };
+      sliderInput.oninput = () => {
+        valueInput.value = sliderInput.value;
+        updateDisplay();
+      };
+      nameInput.onblur = () => nameInput.disabled = true;
+
+      itemDiv.append(nameInput, valueInput, sliderInput, yearlySpan, editBtn, deleteBtn);
+      contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+    }
+
+    // --- Special Bank Group & Mortgage Item ---
+
+    // Create a special Bank group (with group name "Bank" and bank emoji)
+    function createBankGroupElement() {
+      createGroupElement("Bank", "🏦", "#c6d4bd");
+      const groups = document.querySelectorAll('.group');
+      const lastGroup = groups[groups.length - 1];
+      const contentDiv = lastGroup.querySelector('.group-content');
+      createMortgageItemElement(contentDiv);
+    }
+
+    // Create a mortgage item with three inputs: Loan (principal), Interest Rate, and Loan Term (years & months)
+    function createMortgageItemElement(contentDiv) {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'item';
+
+      // Loan (principal) input
+      const principalInput = document.createElement('input');
+      principalInput.type = 'number';
+      principalInput.value = '0';
+      principalInput.placeholder = 'Loan';
+      principalInput.style.margin = '0 10px';
+
+      // Interest rate input
+      const rateInput = document.createElement('input');
+      rateInput.type = 'number';
+      rateInput.value = '0';
+      rateInput.placeholder = 'Interest Rate (%)';
+      rateInput.style.margin = '0 10px';
+
+      // Loan term inputs: Years and Months
+      const termYearsInput = document.createElement('input');
+      termYearsInput.type = 'number';
+      termYearsInput.value = '0';
+      termYearsInput.placeholder = 'Years';
+      termYearsInput.style.margin = '0 10px';
+      const termMonthsInput = document.createElement('input');
+      termMonthsInput.type = 'number';
+      termMonthsInput.value = '0';
+      termMonthsInput.placeholder = 'Months';
+      termMonthsInput.style.margin = '0 10px';
+
+      // Display for calculated cost
+      const costDisplay = document.createElement('span');
+      costDisplay.className = 'yearly-value';
+      costDisplay.textContent = '($0/week, $0/year)';
+
+      // Calculation using the NZ formula:
+      // r = (annual rate/100)/52, n = (years*52 + months*(52/12))
+      // R = P * r * (1+r)^n / ((1+r)^n - 1)
+      function updateMortgageCost() {
+        const principal = parseFloat(principalInput.value) || 0;
+        const annualRate = parseFloat(rateInput.value) || 0;
+        const termYears = parseFloat(termYearsInput.value) || 0;
+        const termMonths = parseFloat(termMonthsInput.value) || 0;
+        const r = annualRate / 100 / 52;
+        const n = termYears * 52 + termMonths * (52 / 12);
+        let weeklyCost = 0;
+        if (n > 0 && r > 0) {
+          const factor = Math.pow(1 + r, n);
+          weeklyCost = principal * r * factor / (factor - 1);
+        }
+        const annualCost = weeklyCost * 52;
+        costDisplay.textContent = `($${weeklyCost.toFixed(2)}/week, $${annualCost.toFixed(2)}/year)`;
+        costDisplay.setAttribute('data-weekly', weeklyCost);
+        updateChart();
+      }
+      principalInput.oninput = updateMortgageCost;
+      rateInput.oninput = updateMortgageCost;
+      termYearsInput.oninput = updateMortgageCost;
+      termMonthsInput.oninput = updateMortgageCost;
+
+      // Optional edit and delete buttons (if desired)
+      const editBtn = document.createElement('span');
+      editBtn.textContent = '🖊️';
+      editBtn.onclick = () => {
+        principalInput.disabled = false;
+        rateInput.disabled = false;
+        termYearsInput.disabled = false;
+        termMonthsInput.disabled = false;
+        principalInput.focus();
+      };
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.onclick = () => {
+        if (confirm('Delete this mortgage item?')) {
+          itemDiv.remove();
+          updateChart();
+        }
+      };
+
+      itemDiv.append(principalInput, rateInput, termYearsInput, termMonthsInput, costDisplay, editBtn, deleteBtn);
+      contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+    }
+
+    // Toggle chart display
+    function toggleChart() {
+      chartVisible = !chartVisible;
+      document.getElementById('chartContainer').style.display = chartVisible ? 'block' : 'none';
+      document.querySelector('.toggle-chart').textContent = chartVisible ? '📊 Hide Chart ▲' : '📊 Show Chart ▼';
+      updateChart();
+    }
+
+    // Update pie chart: each slice represents one item, using weekly cost from normal or mortgage items.
+    function updateChart() {
+      let labels = [];
+      let data = [];
+      let backgroundColors = [];
+      const groups = document.querySelectorAll('.group');
+      
+      groups.forEach(group => {
+        const groupName = group.querySelector('.group-title .group-info span:nth-child(2)').textContent;
+        const groupColor = group.getAttribute('data-color');
+        const items = group.querySelectorAll('.item');
+        items.forEach(item => {
+          const itemNameInput = item.querySelector('input:not([type])');
+          const itemName = itemNameInput ? itemNameInput.value : "Mortgage";
+          const valueInput = item.querySelector('input[type="number"]');
+          let weekly = 0;
+          const costDisplay = item.querySelector('.yearly-value');
+          if (costDisplay && costDisplay.hasAttribute('data-weekly')) {
+            weekly = parseFloat(costDisplay.getAttribute('data-weekly')) || 0;
+          } else if (valueInput) {
+            weekly = parseFloat(valueInput.value) || 0;
+          }
+          if (weekly > 0) {
+            labels.push(groupName + " - " + itemName);
+            data.push(weekly);
+            backgroundColors.push(lightenColor(groupColor, 0.5));
+          }
+        });
+      });
+      
+      if (chartInstance) chartInstance.destroy();
+      const ctx = document.getElementById('budgetChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: backgroundColors
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            datalabels: {
+              color: '#000',
+              formatter: function(value, context) {
+                return context.chart.data.labels[context.dataIndex];
+              },
+              anchor: 'center',
+              align: 'center',
+              font: { weight: 'bold', size: 12 }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+      
+      updateTotals();
+    }
+
+    // Update totals; mortgage items now also save principal, rate, and term if available.
+    function updateTotals() {
+      let weeklyTotal = 0, yearlyTotal = 0;
+      const income = parseFloat(document.getElementById('incomeInput').value) || 0;
+      document.querySelectorAll('.yearly-value').forEach(item => {
+        let weekly;
+        if (item.hasAttribute('data-weekly')) {
+          weekly = parseFloat(item.getAttribute('data-weekly')) || 0;
+        } else {
+          const match = item.textContent.match(/\$([\d\.]+)/);
+          weekly = match ? parseFloat(match[1]) / 52 : 0;
+        }
+        weeklyTotal += weekly;
+      });
+      yearlyTotal = weeklyTotal * 52;
+      const moneyLeft = income - weeklyTotal;
+      document.getElementById('totalsDiv').innerHTML = `
+        <strong>Total Weekly Expenses:</strong> $${weeklyTotal.toFixed(2)} |
+        <strong>Total Yearly Expenses:</strong> $${yearlyTotal.toFixed(2)} |
+        <strong>Money Left Weekly:</strong> $${moneyLeft.toFixed(2)}
+      `;
+    }
+
+    // --- Local Storage and CSV Import/Export ---
+
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('budgetData');
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          document.getElementById('incomeInput').value = data.income || 0;
+          (data.groups || []).forEach(g => {
+            createGroupElement(g.name, g.emoji, g.color);
+            const groups = document.querySelectorAll('.group');
+            const lastGroup = groups[groups.length - 1];
+            const contentDiv = lastGroup.querySelector('.group-content');
+            g.items.forEach(i => {
+              if (g.name.toLowerCase() === "bank" && i.principal !== undefined && i.rate !== undefined && i.termYears !== undefined && i.termMonths !== undefined) {
+                // Restore mortgage item with principal, rate, and loan term fields
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+
+                const principalInput = document.createElement('input');
+                principalInput.type = 'number';
+                principalInput.value = i.principal;
+                principalInput.placeholder = 'Loan';
+                principalInput.style.margin = '0 10px';
+
+                const rateInput = document.createElement('input');
+                rateInput.type = 'number';
+                rateInput.value = i.rate;
+                rateInput.placeholder = 'Interest Rate (%)';
+                rateInput.style.margin = '0 10px';
+
+                const termYearsInput = document.createElement('input');
+                termYearsInput.type = 'number';
+                termYearsInput.value = i.termYears;
+                termYearsInput.placeholder = 'Years';
+                termYearsInput.style.margin = '0 10px';
+
+                const termMonthsInput = document.createElement('input');
+                termMonthsInput.type = 'number';
+                termMonthsInput.value = i.termMonths;
+                termMonthsInput.placeholder = 'Months';
+                termMonthsInput.style.margin = '0 10px';
+
+                const costDisplay = document.createElement('span');
+                costDisplay.className = 'yearly-value';
+                // Calculate cost using the formula
+                const r = i.rate / 100 / 52;
+                const n = i.termYears * 52 + i.termMonths * (52 / 12);
+                let weeklyCost = 0;
+                if (n > 0 && r > 0) {
+                  const factor = Math.pow(1 + r, n);
+                  weeklyCost = i.principal * r * factor / (factor - 1);
+                }
+                const annualCost = weeklyCost * 52;
+                costDisplay.textContent = `($${weeklyCost.toFixed(2)}/week, $${annualCost.toFixed(2)}/year)`;
+                costDisplay.setAttribute('data-weekly', weeklyCost);
+
+                function updateMortgageCost() {
+                  const principal = parseFloat(principalInput.value) || 0;
+                  const rate = parseFloat(rateInput.value) || 0;
+                  const termYears = parseFloat(termYearsInput.value) || 0;
+                  const termMonths = parseFloat(termMonthsInput.value) || 0;
+                  const r = rate / 100 / 52;
+                  const n = termYears * 52 + termMonths * (52 / 12);
+                  let weeklyCost = 0;
+                  if (n > 0 && r > 0) {
+                    const factor = Math.pow(1 + r, n);
+                    weeklyCost = principal * r * factor / (factor - 1);
+                  }
+                  const annualCost = weeklyCost * 52;
+                  costDisplay.textContent = `($${weeklyCost.toFixed(2)}/week, $${annualCost.toFixed(2)}/year)`;
+                  costDisplay.setAttribute('data-weekly', weeklyCost);
+                  updateChart();
+                }
+                principalInput.oninput = updateMortgageCost;
+                rateInput.oninput = updateMortgageCost;
+                termYearsInput.oninput = updateMortgageCost;
+                termMonthsInput.oninput = updateMortgageCost;
+
+                itemDiv.append(principalInput, rateInput, termYearsInput, termMonthsInput, costDisplay);
+                contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+              } else {
+                // Restore regular item
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                const nameInput = document.createElement('input');
+                nameInput.value = i.name;
+                const valueInput = document.createElement('input');
+                valueInput.type = 'number';
+                valueInput.value = i.weekly;
+                valueInput.style.margin = '0 10px';
+                const sliderInput = document.createElement('input');
+                sliderInput.type = 'range';
+                sliderInput.min = 0;
+                sliderInput.max = 1000;
+                sliderInput.value = i.weekly;
+                sliderInput.style.marginRight = '10px';
+                const yearlySpan = document.createElement('span');
+                yearlySpan.className = 'yearly-value';
+                yearlySpan.textContent = `($${(i.weekly * 52).toFixed(2)}/year)`;
+                const editBtn = document.createElement('span');
+                editBtn.textContent = '🖊️';
+                editBtn.onclick = () => {
+                  nameInput.disabled = false;
+                  nameInput.focus();
+                };
+                const deleteBtn = document.createElement('span');
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.onclick = () => {
+                  if (confirm('Delete this item?')) {
+                    itemDiv.remove();
+                    updateChart();
+                  }
+                };
+                function updateDisplay() {
+                  const weekly = parseFloat(valueInput.value) || 0;
+                  yearlySpan.textContent = `($${(weekly * 52).toFixed(2)}/year)`;
+                  sliderInput.value = weekly;
+                  valueInput.value = weekly;
+                  updateChart();
+                }
+                valueInput.oninput = () => {
+                  sliderInput.value = valueInput.value;
+                  updateDisplay();
+                };
+                sliderInput.oninput = () => {
+                  valueInput.value = sliderInput.value;
+                  updateDisplay();
+                };
+                nameInput.onblur = () => { nameInput.disabled = true; };
+                itemDiv.append(nameInput, valueInput, sliderInput, yearlySpan, editBtn, deleteBtn);
+                contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+              }
+            });
+          });
+          setTimeout(updateChart, 300);
+        } catch (e) {
+          console.error("Failed to load data", e);
+        }
+      }
+    });
+
+    setInterval(saveToLocalStorage, 2000);
+    function saveToLocalStorage() {
+      const groups = [];
+      document.querySelectorAll('.group').forEach(group => {
+        const groupName = group.querySelector('.group-title .group-info span:nth-child(2)').textContent;
+        const groupEmoji = group.querySelector('.group-title .group-info span:nth-child(1)').textContent;
+        const groupColor = group.getAttribute('data-color');
+        const items = [];
+        group.querySelectorAll('.item').forEach(item => {
+          let itemName = "Mortgage"; // Default for mortgage items
+          let itemWeekly = 0;
+          const costDisplay = item.querySelector('.yearly-value');
+          if (costDisplay && costDisplay.hasAttribute('data-weekly')) {
+            itemWeekly = parseFloat(costDisplay.getAttribute('data-weekly')) || 0;
+          } else {
+            const itemNameElement = item.querySelector('input:not([type])');
+            itemName = itemNameElement ? itemNameElement.value : "New Item";
+            const itemWeeklyElement = item.querySelector('input[type="number"]');
+            itemWeekly = itemWeeklyElement ? parseFloat(itemWeeklyElement.value) || 0 : 0;
+          }
+          // Mortgage-specific: check for Loan, Interest Rate, and Loan Term inputs.
+          const principalInput = item.querySelector('input[placeholder="Loan"]');
+          const rateInput = item.querySelector('input[placeholder="Interest Rate (%)"]');
+          const termYearsInput = item.querySelector('input[placeholder="Years"]');
+          const termMonthsInput = item.querySelector('input[placeholder="Months"]');
+          if (principalInput && rateInput && termYearsInput && termMonthsInput) {
+            const principal = parseFloat(principalInput.value) || 0;
+            const rate = parseFloat(rateInput.value) || 0;
+            const termYears = parseFloat(termYearsInput.value) || 0;
+            const termMonths = parseFloat(termMonthsInput.value) || 0;
+            items.push({ name: itemName, weekly: itemWeekly, principal, rate, termYears, termMonths });
+          } else {
+            items.push({ name: itemName, weekly: itemWeekly });
+          }
+        });
+        groups.push({ name: groupName, emoji: groupEmoji, color: groupColor, items });
+      });
+      const data = {
+        income: document.getElementById('incomeInput').value,
+        groups: groups,
+      };
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      console.log("Data saved successfully:", data);
+    }
+
+    // CSV Import function
+    function importCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return console.error("No file selected for import.");
+    
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const csv = e.target.result.trim().split("\n");
+        if (csv.length < 2) return;
+    
+        const incomeRow = csv[0].split(",");
+        const income = parseFloat(incomeRow[1]) || 0;
+        document.getElementById('incomeInput').value = income;
+    
+        // Get headers
+        const headerRow = csv.find(row => row.includes("Group Name"));
+        const startIndex = csv.indexOf(headerRow) + 1;
+        const rows = csv.slice(startIndex);
+    
+        const data = {};
+    
+        rows.forEach(row => {
+          const [groupName, emoji, color, itemName, weekly, type, principal, rate, years, months] = row.split(",");
+          if (!data[groupName]) {
+            data[groupName] = { emoji, color, items: [] };
+          }
+          data[groupName].items.push({
+            name: itemName,
+            weekly: parseFloat(weekly) || 0,
+            type,
+            principal: parseFloat(principal) || 0,
+            rate: parseFloat(rate) || 0,
+            termYears: parseInt(years) || 0,
+            termMonths: parseInt(months) || 0
+          });
+        });
+    
+        // Now generate groups/items
+        for (const groupName in data) {
+          const group = data[groupName];
+          createGroupElement(groupName, group.emoji, group.color);
+          const groups = document.querySelectorAll('.group');
+          const lastGroup = groups[groups.length - 1];
+          const contentDiv = lastGroup.querySelector('.group-content');
+    
+          group.items.forEach(item => {
+            if (item.type === "mortgage") {
+              const itemDiv = document.createElement('div');
+              itemDiv.className = 'item';
+    
+              const principalInput = document.createElement('input');
+              principalInput.type = 'number';
+              principalInput.value = item.principal;
+              principalInput.placeholder = 'Loan';
+              principalInput.style.margin = '0 10px';
+    
+              const rateInput = document.createElement('input');
+              rateInput.type = 'number';
+              rateInput.value = item.rate;
+              rateInput.placeholder = 'Interest Rate (%)';
+              rateInput.style.margin = '0 10px';
+    
+              const yearsInput = document.createElement('input');
+              yearsInput.type = 'number';
+              yearsInput.value = item.termYears;
+              yearsInput.placeholder = 'Years';
+              yearsInput.style.margin = '0 10px';
+    
+              const monthsInput = document.createElement('input');
+              monthsInput.type = 'number';
+              monthsInput.value = item.termMonths;
+              monthsInput.placeholder = 'Months';
+              monthsInput.style.margin = '0 10px';
+    
+              const costDisplay = document.createElement('span');
+              costDisplay.className = 'yearly-value';
+    
+              const update = () => {
+                const r = rateInput.value / 100 / 52;
+                const n = yearsInput.value * 52 + monthsInput.value * (52 / 12);
+                let weekly = 0;
+                if (n > 0 && r > 0) {
+                  const f = Math.pow(1 + r, n);
+                  weekly = item.principal * r * f / (f - 1);
+                }
+                const annual = weekly * 52;
+                costDisplay.textContent = `($${weekly.toFixed(2)}/week, $${annual.toFixed(2)}/year)`;
+                costDisplay.setAttribute('data-weekly', weekly);
+                updateChart();
+              };
+    
+              principalInput.oninput = rateInput.oninput = yearsInput.oninput = monthsInput.oninput = update;
+              update();
+    
+              const editBtn = document.createElement('span');
+              editBtn.textContent = '🖊️';
+              editBtn.onclick = () => {
+                principalInput.disabled = rateInput.disabled = yearsInput.disabled = monthsInput.disabled = false;
+                principalInput.focus();
+              };
+    
+              const deleteBtn = document.createElement('span');
+              deleteBtn.textContent = '🗑️';
+              deleteBtn.onclick = () => {
+                if (confirm('Delete this mortgage item?')) {
+                  itemDiv.remove();
+                  updateChart();
+                }
+              };
+    
+              itemDiv.append(principalInput, rateInput, yearsInput, monthsInput, costDisplay, editBtn, deleteBtn);
+              contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+            } else {
+              // Standard item
+              const itemDiv = document.createElement('div');
+              itemDiv.className = 'item';
+    
+              const nameInput = document.createElement('input');
+              nameInput.value = item.name;
+    
+              const valueInput = document.createElement('input');
+              valueInput.type = 'number';
+              valueInput.value = item.weekly;
+              valueInput.style.margin = '0 10px';
+    
+              const sliderInput = document.createElement('input');
+              sliderInput.type = 'range';
+              sliderInput.min = 0;
+              sliderInput.max = 1000;
+              sliderInput.value = item.weekly;
+              sliderInput.style.marginRight = '10px';
+    
+              const yearlySpan = document.createElement('span');
+              yearlySpan.className = 'yearly-value';
+              yearlySpan.textContent = `($${(item.weekly * 52).toFixed(2)}/year)`;
+    
+              const editBtn = document.createElement('span');
+              editBtn.textContent = '🖊️';
+              editBtn.onclick = () => {
+                nameInput.disabled = false;
+                nameInput.focus();
+              };
+    
+              const deleteBtn = document.createElement('span');
+              deleteBtn.textContent = '🗑️';
+              deleteBtn.onclick = () => {
+                if (confirm('Delete this item?')) {
+                  itemDiv.remove();
+                  updateChart();
+                }
+              };
+    
+              const updateDisplay = () => {
+                const weekly = parseFloat(valueInput.value) || 0;
+                sliderInput.value = weekly;
+                yearlySpan.textContent = `($${(weekly * 52).toFixed(2)}/year)`;
+                updateChart();
+              };
+    
+              valueInput.oninput = sliderInput.oninput = updateDisplay;
+              nameInput.onblur = () => nameInput.disabled = true;
+    
+              itemDiv.append(nameInput, valueInput, sliderInput, yearlySpan, editBtn, deleteBtn);
+              contentDiv.insertBefore(itemDiv, contentDiv.lastElementChild);
+            }
+          });
+        }
+    
+        updateChart();
+      };
+      reader.readAsText(file);
+    }
+
+
+    // CSV Export function
+    function exportCSV() {
+      try {
+        const groups = [];
+        document.querySelectorAll('.group').forEach(group => {
+          const groupName = group.querySelector('.group-title .group-info span:nth-child(2)').textContent;
+          const groupEmoji = group.querySelector('.group-title .group-info span:nth-child(1)').textContent;
+          const groupColor = group.getAttribute('data-color');
+          const items = [];
+    
+          group.querySelectorAll('.item').forEach(item => {
+            let itemName = "Mortgage";
+            let weeklyAmount = 0;
+            let type = "regular";
+            let principal = "";
+            let rate = "";
+            let termYears = "";
+            let termMonths = "";
+    
+            const costDisplay = item.querySelector('.yearly-value');
+            if (costDisplay && costDisplay.hasAttribute('data-weekly')) {
+              weeklyAmount = parseFloat(costDisplay.getAttribute('data-weekly')) || 0;
+            } else {
+              const itemWeeklyElement = item.querySelector('input[type="number"]');
+              weeklyAmount = itemWeeklyElement ? parseFloat(itemWeeklyElement.value) || 0 : 0;
+            }
+    
+            const principalInput = item.querySelector('input[placeholder="Loan"]');
+            const rateInput = item.querySelector('input[placeholder="Interest Rate (%)"]');
+            const yearsInput = item.querySelector('input[placeholder="Years"]');
+            const monthsInput = item.querySelector('input[placeholder="Months"]');
+    
+            if (principalInput && rateInput && yearsInput && monthsInput) {
+              // Mortgage-specific
+              type = "mortgage";
+              principal = parseFloat(principalInput.value) || 0;
+              rate = parseFloat(rateInput.value) || 0;
+              termYears = parseInt(yearsInput.value) || 0;
+              termMonths = parseInt(monthsInput.value) || 0;
+            } else {
+              // Regular item
+              const itemNameInput = item.querySelector('input:not([type])');
+              itemName = itemNameInput ? itemNameInput.value : "Unnamed";
+            }
+    
+            items.push({ itemName, weeklyAmount, type, principal, rate, termYears, termMonths });
+          });
+    
+          groups.push({ groupName, emoji: groupEmoji, color: groupColor, items });
+        });
+    
+        const income = document.getElementById('incomeInput').value;
+        let csvContent = `Income,${income}\n\n`;
+        csvContent += `Group Name,Emoji,Color,Item Name,Weekly Amount,Type,Principal,Rate,Term Years,Term Months\n`;
+    
+        groups.forEach(group => {
+          group.items.forEach(item => {
+            csvContent += [
+              group.groupName,
+              group.emoji,
+              group.color,
+              item.itemName,
+              item.weeklyAmount,
+              item.type,
+              item.principal,
+              item.rate,
+              item.termYears,
+              item.termMonths
+            ].join(",") + "\n";
+          });
+        });
+    
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', 'budget_data.csv');
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    
+        console.log("CSV export complete.");
+      } catch (err) {
+        console.error("CSV export failed:", err);
+      }
+    }
+
+    // Reset function
+    function resetAll() {
+      if (!confirm("Are you sure you want to reset everything? This action cannot be undone.")) {
+          return;
+      }
+      localStorage.removeItem('budgetData');
+      document.getElementById('incomeInput').value = 0;
+      const groupsContainer = document.getElementById('groupsContainer');
+      while (groupsContainer.firstChild) {
+          groupsContainer.removeChild(groupsContainer.firstChild);
+      }
+      if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+      }
+      document.getElementById('totalsDiv').innerHTML = "";
+      console.log("All data has been reset!");
+    }
+
+    // Full Screen Toggle function
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        });
+        document.getElementById('fullscreenBtn').textContent = "Exit Full Screen";
+      } else {
+        document.exitFullscreen();
+        document.getElementById('fullscreenBtn').textContent = "Full Screen";
+      }
+    }
+
+    // Initialize SortableJS for drag-and-drop reordering of groups
+    document.addEventListener('DOMContentLoaded', () => {
+      const groupsContainer = document.getElementById('groupsContainer');
+      Sortable.create(groupsContainer, {
+        animation: 150,
+        onEnd: function (evt) {
+          updateChart();
+          saveToLocalStorage();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
