@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Break-Fee Calculator</title>
+  <style>
+    /* General styling */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .calculator {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #555;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .submit-btn {
+      background-color: #96b4c9;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 16px;
+    }
+    .submit-btn:hover {
+      background-color: #7fb4b5;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #e88e5a;
+      color: white;
+      border-radius: 5px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .calc-type {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+      gap: 15px;
+    }
+    .calc-type button {
+      background-color: #ddd;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .calc-type button.active {
+      background-color: #96b4c9;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>Break-Fee Calculator</h1>
+  <div class="calculator">
+    <div class="calc-type">
+      <button id="simpleBtn" class="active" onclick="toggleCalc('simple')">Simple Calculation</button>
+      <button id="advancedBtn" onclick="toggleCalc('advanced')">Advanced Calculation</button>
+    </div>
+
+    <!-- Simple Calculation Section -->
+    <div id="simpleCalc">
+      <div class="form-group">
+        <label for="loanAmount">Loan Amount ($):</label>
+        <input type="number" id="loanAmount" placeholder="Enter loan amount">
+      </div>
+      <div class="form-group">
+        <label for="originalRate">Original Fixed Interest Rate (%):</label>
+        <input type="number" id="originalRate" placeholder="Enter original interest rate">
+      </div>
+      <div class="form-group">
+        <label for="currentRate">New Interest Rate (%):</label>
+        <input type="number" id="currentRate" placeholder="Enter new interest rate">
+      </div>
+      <div class="form-group">
+        <label for="remainingYears">Remaining Term (Years):</label>
+        <input type="number" id="remainingYears" placeholder="Enter remaining years">
+      </div>
+      <button class="submit-btn" onclick="calculateSimple()">Calculate Break Fee</button>
+    </div>
+
+    <!-- Advanced Calculation Section -->
+    <div id="advancedCalc" style="display: none;">
+      <div class="form-group">
+        <label for="loanAmountAdv">Loan Amount ($):</label>
+        <input type="number" id="loanAmountAdv" placeholder="Enter loan amount">
+      </div>
+      <div class="form-group">
+        <label for="wholesaleStartRate">Wholesale Rate at Mortgage Start (%):</label>
+        <input type="number" id="wholesaleStartRate" placeholder="Enter historical wholesale rate">
+      </div>
+      <div class="form-group">
+        <label for="wholesaleCurrentRate">Current Wholesale Rate (%):</label>
+        <input type="number" id="wholesaleCurrentRate" placeholder="Enter current wholesale rate">
+      </div>
+      <div class="form-group">
+        <label for="monthlyInstallment">Monthly Installment ($):</label>
+        <input type="number" id="monthlyInstallment" placeholder="Enter monthly installment">
+      </div>
+      <div class="form-group">
+        <label for="installmentsPaid">Installments Paid:</label>
+        <input type="number" id="installmentsPaid" placeholder="Enter number of installments paid">
+      </div>
+      <div class="form-group">
+        <label for="remainingYearsAdv">Remaining Term (Years):</label>
+        <input type="number" id="remainingYearsAdv" placeholder="Enter remaining years">
+      </div>
+      <div class="form-group">
+        <label for="remainingMonthsAdv">Remaining Term (Months):</label>
+        <input type="number" id="remainingMonthsAdv" placeholder="Enter remaining months">
+      </div>
+      <button class="submit-btn" onclick="calculateAdvanced()">Calculate Break Fee</button>
+    </div>
+
+    <div id="result" class="result" style="display: none;"></div>
+  </div>
+
+  <script>
+    function toggleCalc(type) {
+      document.getElementById('simpleCalc').style.display = type === 'simple' ? 'block' : 'none';
+      document.getElementById('advancedCalc').style.display = type === 'advanced' ? 'block' : 'none';
+
+      document.getElementById('simpleBtn').classList.toggle('active', type === 'simple');
+      document.getElementById('advancedBtn').classList.toggle('active', type === 'advanced');
+    }
+
+    function calculateSimple() {
+      const loanAmount = parseFloat(document.getElementById('loanAmount').value) || 0;
+      const originalRate = parseFloat(document.getElementById('originalRate').value) || 0;
+      const currentRate = parseFloat(document.getElementById('currentRate').value) || 0;
+      const remainingYears = parseFloat(document.getElementById('remainingYears').value) || 0;
+
+      if (loanAmount > 0 && originalRate > 0 && currentRate > 0 && remainingYears > 0) {
+        const breakFee = ((originalRate - currentRate) / 100) * loanAmount * remainingYears;
+        displayResult(`Estimated Break Fee: $${breakFee.toFixed(2)}`);
+      } else {
+        alert("Please fill out all fields with valid values.");
+      }
+    }
+
+    function calculateAdvanced() {
+      const loanAmount = parseFloat(document.getElementById('loanAmountAdv').value) || 0;
+      const wholesaleStartRate = parseFloat(document.getElementById('wholesaleStartRate').value) || 0;
+      const wholesaleCurrentRate = parseFloat(document.getElementById('wholesaleCurrentRate').value) || 0;
+      const monthlyInstallment = parseFloat(document.getElementById('monthlyInstallment').value) || 0;
+      const installmentsPaid = parseFloat(document.getElementById('installmentsPaid').value) || 0;
+      const remainingYears = parseFloat(document.getElementById('remainingYearsAdv').value) || 0;
+      const remainingMonths = parseFloat(document.getElementById('remainingMonthsAdv').value) || 0;
+
+      const paidAmount = monthlyInstallment * installmentsPaid;
+      const remainingPrincipal = Math.max(loanAmount - paidAmount, 0);
+      const totalRemainingYears = remainingYears + (remainingMonths / 12);
+
+      if (remainingPrincipal > 0 && wholesaleStartRate > 0 && wholesaleCurrentRate > 0 && totalRemainingYears > 0) {
+        const breakFee = ((wholesaleStartRate - wholesaleCurrentRate) / 100) * remainingPrincipal * totalRemainingYears;
+        displayResult(`Estimated Break Fee: $${breakFee.toFixed(2)}`);
+      } else {
+        alert("Please fill out all fields with valid values.");
+      }
+    }
+
+    function displayResult(message) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.style.display = 'block';
+      resultDiv.textContent = message;
+    }
+  </script>
+</body>
+</html>
